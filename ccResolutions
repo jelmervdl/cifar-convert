@@ -1,0 +1,3 @@
+Magick++.h	`pkg-config --cflags --libs Magick++`
+sys/types.h
+sys/stat.h
