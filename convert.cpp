@@ -1,10 +1,13 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
+#include <vector>
 #include <Magick++.h>
 #include <cstdio>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <cassert>
 
 using namespace std;
 
@@ -38,20 +41,28 @@ char *CifarImage::asPixels() const
 	return stream;
 }
 
-void makeOutputDirectories()
+void makeDirectory(string const &directory)
 {
-	char *dirname = new char[6];
-	
-	for (int i = 0; i < 10; ++i)
-	{
-		sprintf(dirname, "png/%d", i);
-		mkdir(dirname, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-	}
+	stringstream dirname;
+	dirname << "png/" << directory;
 
-	delete[] dirname;
+	mkdir(dirname.str().c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 }
 
-void process(string const &fileName, int &n)
+vector<string> readCategories(string const &fileName)
+{
+	ifstream in(fileName.c_str(), ios_base::in);
+	vector<string> categories;
+	
+	copy(
+		istream_iterator<string>(in),
+		istream_iterator<string>(),
+		back_inserter(categories));
+
+	return categories;
+}
+
+void process(string const &fileName, int &n, vector<string> const &categories)
 {
 	ifstream in(fileName.c_str(), ios_base::in);
 
@@ -66,21 +77,39 @@ void process(string const &fileName, int &n)
 		image.read(32, 32, "RGB", Magick::CharPixel, stream);
 		delete[] stream;
 
+		// assumption: the meta file describing the labels was complete
+		assert((size_t) img.label < categories.size());
+
 		stringstream dest;
-		dest << "png/" << (int) img.label << "/" << (n++) << ".png";
+		dest << "png/" << categories[(int) img.label] << "/" << (n++) << ".png";
 		cout << "Writing " << dest.str() << endl;
 
 		image.write(dest.str());
 	}
 }
 
+int usage(string const &programName)
+{
+	cout << "Usage: " << programName << " batches.meta.txt [data_batch_1.bin, ..]" << endl;
+	return 1;
+}
+
 int main(int argc, char **argv)
 {
-	makeOutputDirectories();
-	int n = 0;
+	if (argc < 2)
+		return usage(argv[0]);
 
-	for (int i = 1; i < argc; ++i)
-		process(argv[i], n);
+	// read all the labels from the meta file.
+	vector<string> categories = readCategories(argv[1]);
+
+	// make output directories
+	mkdir("png", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	for_each(categories.begin(), categories.end(), makeDirectory);
+	
+	// process the rest of the arguments, i.e. the batch files.
+	int n = 0;
+	for (int i = 2; i < argc; ++i)
+		process(argv[i], n, categories);
 	
 	return 0;
 }
