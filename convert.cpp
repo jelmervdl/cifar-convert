@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <cassert>
 
 using namespace std;
 
@@ -40,14 +41,12 @@ char *CifarImage::asPixels() const
 	return stream;
 }
 
-void makeOutputDirectories(vector<string> const &directories)
+void makeDirectory(string const &directory)
 {
-	for (size_t i = 0; i < directories.size(); ++i)
-	{
-		stringstream dirname;
-		dirname << "png/" << directories[i];
-		mkdir(dirname.str().c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-	}
+	stringstream dirname;
+	dirname << "png/" << directory;
+
+	mkdir(dirname.str().c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 }
 
 vector<string> readCategories(string const &fileName)
@@ -78,6 +77,9 @@ void process(string const &fileName, int &n, vector<string> const &categories)
 		image.read(32, 32, "RGB", Magick::CharPixel, stream);
 		delete[] stream;
 
+		// assumption: the meta file describing the labels was complete
+		assert((size_t) img.label < categories.size());
+
 		stringstream dest;
 		dest << "png/" << categories[(int) img.label] << "/" << (n++) << ".png";
 		cout << "Writing " << dest.str() << endl;
@@ -97,10 +99,14 @@ int main(int argc, char **argv)
 	if (argc < 2)
 		return usage(argv[0]);
 
+	// read all the labels from the meta file.
 	vector<string> categories = readCategories(argv[1]);
 
-	makeOutputDirectories(categories);
+	// make output directories
+	mkdir("png", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	for_each(categories.begin(), categories.end(), makeDirectory);
 	
+	// process the rest of the arguments, i.e. the batch files.
 	int n = 0;
 	for (int i = 2; i < argc; ++i)
 		process(argv[i], n, categories);
